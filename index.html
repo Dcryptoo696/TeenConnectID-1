@@ -5,31 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>TeenConnectID - Chat & Match Remaja</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-
-  <!-- Firebase v12 Modular SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-database.js";
-
-    // === FIREBASE CONFIG BARU (teenconnectid-1) ===
-    const firebaseConfig = {
-      apiKey: "AIzaSyA2hNHuhw3I0lxJQirWbgOhBWW4se_pWnc",
-      authDomain: "teenconnectid-1.firebaseapp.com",
-      projectId: "teenconnectid-1",
-      storageBucket: "teenconnectid-1.firebasestorage.app",
-      messagingSenderId: "205327713945",
-      appId: "1:205327713945:web:086b8aff268ef3cac89a08",
-      measurementId: "G-07TQ20DD6F"
-    };
-
-    // Inisialisasi Firebase
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    // Ekspor ke global agar bisa dipakai di script biasa
-    window.firebaseDB = { db, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo };
-  </script>
-
+  
+  <!-- Firebase v9 Compat SDK (JALAN DI VERCEL!) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  
   <style>
     :root {
       --pink: #ff6b9d;
@@ -222,155 +202,161 @@
   </div>
 
   <script>
-    // Tunggu Firebase SDK siap
-    window.addEventListener('load', () => {
-      if (!window.firebaseDB) {
-        document.getElementById('initLoading').innerHTML = '<p style="color:red;">Gagal memuat Firebase SDK!</p>';
+    // === CONFIG ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2hNHuhw3I0lxJQirWbgOhBWW4se_pWnc",
+      authDomain: "teenconnectid-1.firebaseapp.com",
+      projectId: "teenconnectid-1",
+      storageBucket: "teenconnectid-1.firebasestorage.app",
+      messagingSenderId: "205327713945",
+      appId: "1:205327713945:web:086b8aff268ef3cac89a08",
+      measurementId: "G-07TQ20DD6F"
+    };
+
+    // === STATE ===
+    let db = null;
+    let currentUser = null;
+    let currentMatch = null;
+    let chatListener = null;
+
+    // === INIT ===
+    window.onload = () => {
+      if (typeof firebase === 'undefined') {
+        $('#initLoading').innerHTML = '<p style="color:red;">Gagal memuat Firebase!</p>';
         return;
       }
 
-      const { db, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo } = window.firebaseDB;
+      try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
 
-      let currentUser = null;
-      let currentMatch = null;
-      let chatListener = null;
+        hide('initLoading');
+        show('header');
+        show('home');
 
-      const $ = id => document.getElementById(id);
-      const show = id => $(id)?.classList.remove('hidden');
-      const hide = id => $(id)?.classList.add('hidden');
-      const status = (msg, type = 'info') => {
-        const el = $('status');
-        if (!el) return;
-        el.textContent = msg;
-        el.style.color = type === 'success' ? '#2ed573' : type === 'error' ? '#d63031' : 'var(--pink)';
-        if (type === 'success') setTimeout(() => el.textContent = '', 2000);
-      };
-
-      // Sembunyikan loading
-      hide('initLoading');
-      show('header');
-      show('home');
-
-      // Event Listeners
-      $('loginBtn')?.addEventListener('click', () => quickLogin(db, ref, set, update, onValue, status, show, hide));
-      $('logoutBtn')?.addEventListener('click', () => logout(db, ref, update, currentUser));
-      $('sendBtn')?.addEventListener('click', () => sendMsg(db, ref, push, currentUser, currentMatch));
-      $('msgInput')?.addEventListener('keypress', e => e.key === 'Enter' && sendMsg(db, ref, push, currentUser, currentMatch));
-
-      // === LOGIN ===
-      function quickLogin(db, ref, set, update, onValue, status, show, hide) {
-        const name = $('nameInput')?.value.trim() || 'User' + Math.floor(Math.random() * 1000);
-        const age = parseInt($('ageInput')?.value) || 16;
-        if (age < 13 || age > 19) return status('Umur harus 13-19!', 'error');
-
-        const id = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        currentUser = { id, name, age, online: true };
-        currentUser.uid = id; // TAMBAHKAN BARIS INI!
-
-        set(ref(db, 'users/' + id), currentUser)
-          .then(() => {
-            status('Login sukses!', 'success');
-            $('userStatus').textContent = `${name} Online`;
-            show('userStatus'); show('logoutBtn');
-            hide('home'); show('swipe');
-            loadSwipe(db, ref, onValue, currentUser);
-            startOnlinePing(db, ref, update, id);
-          })
-          .catch(err => status('Gagal login: ' + err.message, 'error'));
+        $('#loginBtn').addEventListener('click', quickLogin);
+        $('#logoutBtn').addEventListener('click', logout);
+        $('#sendBtn').addEventListener('click', sendMsg);
+        $('#msgInput').addEventListener('keypress', e => e.key === 'Enter' && sendMsg());
+      } catch (err) {
+        $('#initLoading').innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
       }
+    };
 
-      // === SWIPE ===
-      function loadSwipe(db, ref, onValue, currentUser) {
-        const usersRef = ref(db, 'users');
-        onValue(usersRef, (snap) => {
-          const users = snap.val() || {};
-          const others = Object.values(users).filter(u => u.id !== currentUser.id && u.online);
-          if (others.length === 0) {
-            $('swipeCard').innerHTML = '<div class="loading">Tidak ada user lain. Ajak teman!</div>';
-            return;
-          }
-          const target = others[Math.floor(Math.random() * others.length)];
-          $('swipeCard').innerHTML = `
-            <img src="https://via.placeholder.com/350x200/FF6B9D/white?text=${encodeURIComponent(target.name[0])}" alt="Profile">
-            <div class="card-info">
-              <h3>${target.name}, ${target.age}</h3>
-              <p>Kota: Jakarta</p>
-              <div class="actions">
-                <button class="btn-swipe btn-no" onclick="loadSwipe(window.firebaseDB.db, window.firebaseDB.ref, window.firebaseDB.onValue, currentUser)">X</button>
-                <button class="btn-swipe btn-yes" onclick="match('${target.id}')">Heart</button>
-              </div>
-            </div>
-          `;
-        });
-      }
+    // === UTILS ===
+    const $ = id => document.getElementById(id);
+    const show = id => $(id)?.classList.remove('hidden');
+    const hide = id => $(id)?.classList.add('hidden');
+    const status = (msg, type = 'info') => {
+      const el = $('status');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = type === 'success' ? '#2ed573' : type === 'error' ? '#d63031' : 'var(--pink)';
+      if (type === 'success') setTimeout(() => el.textContent = '', 2000);
+    };
 
-      // === MATCH ===
-      window.match = function(id) {
-        currentMatch = id;
-        push(ref(db, 'matches'), {
-          user1: currentUser.id,
-          user2: id,
-          timestamp: Date.now()
-        }).then(() => {
-          alert('Match! Buka chat sekarang!');
-          hide('swipe'); show('chat');
-          loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch);
-          startChatListener(db, ref, onChildAdded, query, orderByChild, equalTo, currentUser, currentMatch);
-        });
-      };
+    // === LOGIN ===
+    function quickLogin() {
+      const name = $('#nameInput').value.trim() || 'User' + Math.floor(Math.random() * 1000);
+      const age = parseInt($('#ageInput').value) || 16;
+      if (age < 13 || age > 19) return status('Umur harus 13-19!', 'error');
 
-      // === CHAT ===
-      function loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch) {
-        const chatId = [currentUser.id, currentMatch].sort().join('_');
-        const q = query(ref(db, 'messages'), orderByChild('chatId'), equalTo(chatId));
-        onValue(q, (snap) => {
-          const msgs = snap.val() || {};
-          const box = $('chatBox');
-          box.innerHTML = '';
-          Object.values(msgs).sort((a,b) => a.timestamp - b.timestamp).forEach(m => {
-            const div = document.createElement('div');
-            div.className = `msg ${m.sender === currentUser.id ? 'me' : 'other'}`;
-            div.textContent = m.text;
-            box.appendChild(div);
-          });
-          box.scrollTop = box.scrollHeight;
-        });
-      }
+      const id = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      currentUser = { id, name, age, online: true, uid: id }; // UID untuk rules
 
-      function startChatListener(db, ref, onChildAdded, query, orderByChild, equalTo, currentUser, currentMatch) {
-        if (chatListener) return;
-        const chatId = [currentUser.id, currentMatch].sort().join('_');
-        const q = query(ref(db, 'messages'), orderByChild('chatId'), equalTo(chatId));
-        chatListener = onChildAdded(q, () => loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch));
-      }
+      db.ref('users/' + id).set(currentUser)
+        .then(() => {
+          status('Login sukses!', 'success');
+          $('#userStatus').textContent = `${name} Online`;
+          show('userStatus'); show('logoutBtn');
+          hide('home'); show('swipe');
+          loadSwipe();
+          startOnlinePing();
+        })
+        .catch(err => status('Gagal login: ' + err.message, 'error'));
+    }
 
-      function sendMsg(db, ref, push, currentUser, currentMatch) {
-        const input = $('msgInput');
-        const text = input?.value.trim();
-        if (!text || !currentMatch) return;
-        const chatId = [currentUser.id, currentMatch].sort().join('_');
-        push(ref(db, 'messages'), {
-          chatId, sender: currentUser.id, text, timestamp: Date.now()
-        }).then(() => input.value = '');
-      }
-
-      // === ONLINE PING ===
-      function startOnlinePing(db, ref, update, id) {
-        setInterval(() => {
-          update(ref(db, 'users/' + id), { online: true });
-        }, 5000);
-        setInterval(() => loadSwipe(db, ref, onValue, currentUser), 12000);
-      }
-
-      // === LOGOUT ===
-      function logout(db, ref, update, currentUser) {
-        if (!confirm('Yakin ingin logout?')) return;
-        if (currentUser) {
-          update(ref(db, 'users/' + currentUser.id), { online: false });
+    // === SWIPE ===
+    function loadSwipe() {
+      if (!currentUser) return;
+      db.ref('users').on('value', snap => {
+        const users = snap.val() || {};
+        const others = Object.values(users).filter(u => u.id !== currentUser.id && u.online);
+        if (others.length === 0) {
+          $('#swipeCard').innerHTML = '<div class="loading">Tidak ada user lain. Ajak teman!</div>';
+          return;
         }
-        location.reload();
-      }
-    });
+        const target = others[Math.floor(Math.random() * others.length)];
+        $('#swipeCard').innerHTML = `
+          <img src="https://via.placeholder.com/350x200/FF6B9D/white?text=${encodeURIComponent(target.name[0])}" alt="Profile">
+          <div class="card-info">
+            <h3>${target.name}, ${target.age}</h3>
+            <p>Kota: Jakarta</p>
+            <div class="actions">
+              <button class="btn-swipe btn-no" onclick="loadSwipe()">X</button>
+              <button class="btn-swipe btn-yes" onclick="match('${target.id}')">Heart</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // === MATCH ===
+    window.match = function(id) {
+      currentMatch = id;
+      db.ref('matches').push({
+        user1: currentUser.id,
+        user2: id,
+        timestamp: Date.now()
+      }).then(() => {
+        alert('Match! Buka chat sekarang!');
+        hide('swipe'); show('chat');
+        loadChat();
+      });
+    };
+
+    // === CHAT ===
+    function loadChat() {
+      if (!currentMatch) return;
+      const chatId = [currentUser.id, currentMatch].sort().join('_');
+      db.ref('messages').orderByChild('chatId').equalTo(chatId).on('value', snap => {
+        const msgs = snap.val() || {};
+        const box = $('#chatBox');
+        box.innerHTML = '';
+        Object.values(msgs).sort((a,b) => a.timestamp - b.timestamp).forEach(m => {
+          const div = document.createElement('div');
+          div.className = `msg ${m.sender === currentUser.id ? 'me' : 'other'}`;
+          div.textContent = m.text;
+          box.appendChild(div);
+        });
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+
+    function sendMsg() {
+      const input = $('#msgInput');
+      const text = input.value.trim();
+      if (!text || !currentMatch) return;
+      const chatId = [currentUser.id, currentMatch].sort().join('_');
+      db.ref('messages').push({
+        chatId, sender: currentUser.id, text, timestamp: Date.now()
+      }).then(() => input.value = '');
+    }
+
+    // === PING ===
+    function startOnlinePing() {
+      setInterval(() => {
+        if (currentUser) db.ref('users/' + currentUser.id).update({ online: true });
+      }, 5000);
+      setInterval(loadSwipe, 12000);
+    }
+
+    // === LOGOUT ===
+    function logout() {
+      if (!confirm('Yakin logout?')) return;
+      if (currentUser) db.ref('users/' + currentUser.id).update({ online: false });
+      location.reload();
+    }
   </script>
 </body>
 </html>
