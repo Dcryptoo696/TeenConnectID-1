@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TeenConnectID - Chat & Match Remaja</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Firebase v12 Modular SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-database.js";
+
+    // === FIREBASE CONFIG BARU (teenconnectid-1) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2hNHuhw3I0lxJQirWbgOhBWW4se_pWnc",
+      authDomain: "teenconnectid-1.firebaseapp.com",
+      projectId: "teenconnectid-1",
+      storageBucket: "teenconnectid-1.firebasestorage.app",
+      messagingSenderId: "205327713945",
+      appId: "1:205327713945:web:086b8aff268ef3cac89a08",
+      measurementId: "G-07TQ20DD6F"
+    };
+
+    // Inisialisasi Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Ekspor ke global agar bisa dipakai di script biasa
+    window.firebaseDB = { db, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo };
+  </script>
+
+  <style>
+    :root {
+      --pink: #ff6b9d;
+      --pink-dark: #ff477e;
+      --green: #2ed573;
+      --red: #ff4757;
+      --gray: #f1f1f1;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Poppins', sans-serif; 
+      background: linear-gradient(135deg, #ff9a9e, #fad0c4); 
+      color: #333; 
+      min-height: 100vh; 
+      padding-top: 70px;
+    }
+    header { 
+      background: rgba(255,255,255,0.95); 
+      padding: 1rem; 
+      position: fixed; 
+      width: 100%; 
+      top: 0; 
+      z-index: 1000; 
+      box-shadow: 0 2px 15px rgba(0,0,0,0.1); 
+    }
+    nav { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
+    .logo { font-weight: bold; font-size: 1.5rem; color: var(--pink); }
+    .btn { 
+      background: var(--pink); 
+      color: white; 
+      padding: 0.7rem 1.5rem; 
+      border: none; 
+      border-radius: 25px; 
+      cursor: pointer; 
+      font-weight: 600; 
+      font-size: 0.95rem; 
+      transition: 0.3s;
+    }
+    .btn:hover { background: var(--pink-dark); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+    
+    .hero { 
+      text-align: center; 
+      padding: 3rem 1.5rem; 
+      background: white; 
+      border-radius: 20px; 
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1); 
+      margin: 1rem; 
+    }
+    .hero h1 { color: var(--pink); font-size: 2.5rem; margin-bottom: 1rem; }
+    .form-group { margin: 1rem 0; }
+    .form-group input { 
+      width: 100%; 
+      padding: 0.9rem; 
+      border: 2px solid #eee; 
+      border-radius: 12px; 
+      font-size: 1rem; 
+      transition: 0.3s;
+    }
+    .form-group input:focus { border-color: var(--pink); outline: none; }
+
+    .card { 
+      background: white; 
+      border-radius: 20px; 
+      overflow: hidden; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+      margin: 2rem auto; 
+      max-width: 350px; 
+    }
+    .card img { width: 100%; height: 200px; object-fit: cover; }
+    .card-info { padding: 1.5rem; text-align: center; }
+    .actions { 
+      display: flex; 
+      justify-content: center; 
+      gap: 1.5rem; 
+      margin-top: 1rem; 
+    }
+    .btn-swipe { 
+      width: 55px; height: 55px; 
+      border-radius: 50%; 
+      border: none; 
+      font-size: 1.5rem; 
+      cursor: pointer; 
+      transition: 0.3s;
+    }
+    .btn-no { background: var(--red); color: white; }
+    .btn-yes { background: var(--green); color: white; }
+    .btn-swipe:hover { transform: scale(1.1); }
+
+    .chat-box { 
+      background: white; 
+      border-radius: 15px; 
+      height: 300px; 
+      overflow-y: auto; 
+      padding: 1rem; 
+      margin: 1rem 0; 
+    }
+    .msg { 
+      max-width: 80%; 
+      padding: 0.8rem 1.2rem; 
+      margin: 0.5rem 0; 
+      border-radius: 18px; 
+      font-size: 0.95rem; 
+      word-wrap: break-word;
+    }
+    .me { background: var(--pink); color: white; margin-left: auto; }
+    .other { background: var(--gray); color: #333; }
+    .input-area { 
+      display: flex; 
+      gap: 0.5rem; 
+      margin-top: 1rem; 
+    }
+    .input-area input { 
+      flex: 1; 
+      padding: 0.8rem; 
+      border: 2px solid #eee; 
+      border-radius: 12px; 
+    }
+
+    #status { text-align: center; margin: 1rem 0; font-size: 0.9rem; font-weight: 600; }
+    .online-badge { 
+      background: var(--green); 
+      color: white; 
+      padding: 0.3rem 0.8rem; 
+      border-radius: 15px; 
+      font-size: 0.8rem; 
+    }
+
+    .hidden { display: none !important; }
+    .loading { text-align: center; padding: 2rem; color: var(--pink); font-style: italic; }
+    .init-loading { text-align: center; padding: 5rem; color: var(--pink); font-size: 1.2rem; }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 2rem; }
+      .btn { padding: 0.6rem 1.2rem; font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container init-loading" id="initLoading">
+    <p>Memuat aplikasi... Silakan tunggu</p>
+  </div>
+
+  <header class="hidden" id="header">
+    <nav>
+      <div class="logo">TeenConnectID</div>
+      <div>
+        <span id="userStatus" class="online-badge hidden">Online</span>
+        <button class="btn hidden" id="logoutBtn">Logout</button>
+      </div>
+    </nav>
+  </header>
+
+  <div class="container hidden" id="home">
+    <div class="hero">
+      <h1>TeenConnectID</h1>
+      <p>Masuk dengan 1 klik, swipe, dan chat!</p>
+      <div class="form-group">
+        <input type="text" id="nameInput" placeholder="Nama kamu?" value="Geri">
+      </div>
+      <div class="form-group">
+        <input type="number" id="ageInput" placeholder="Umur (13-19)" min="13" max="19" value="16">
+      </div>
+      <button class="btn" id="loginBtn" style="width:100%; margin-top:1rem;">Login Sekarang</button>
+      <p id="status"></p>
+    </div>
+  </div>
+
+  <div class="container hidden" id="swipe">
+    <h2 style="text-align:center; color:var(--pink); margin-bottom:1rem;">Swipe untuk Match!</h2>
+    <div id="swipeCard" class="card">
+      <div class="loading">Memuat profil...</div>
+    </div>
+  </div>
+
+  <div class="container hidden" id="chat">
+    <h2 style="text-align:center; color:var(--pink); margin-bottom:1rem;">Chat dengan Match</h2>
+    <div id="chatBox" class="chat-box"></div>
+    <div class="input-area">
+      <input type="text" id="msgInput" placeholder="Ketik pesan..." />
+      <button class="btn" id="sendBtn">Kirim</button>
+    </div>
+  </div>
+
+  <script>
+    // Tunggu Firebase SDK siap
+    window.addEventListener('load', () => {
+      if (!window.firebaseDB) {
+        document.getElementById('initLoading').innerHTML = '<p style="color:red;">Gagal memuat Firebase SDK!</p>';
+        return;
+      }
+
+      const { db, ref, set, onValue, push, onChildAdded, update, query, orderByChild, equalTo } = window.firebaseDB;
+
+      let currentUser = null;
+      let currentMatch = null;
+      let chatListener = null;
+
+      const $ = id => document.getElementById(id);
+      const show = id => $(id)?.classList.remove('hidden');
+      const hide = id => $(id)?.classList.add('hidden');
+      const status = (msg, type = 'info') => {
+        const el = $('status');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = type === 'success' ? '#2ed573' : type === 'error' ? '#d63031' : 'var(--pink)';
+        if (type === 'success') setTimeout(() => el.textContent = '', 2000);
+      };
+
+      // Sembunyikan loading
+      hide('initLoading');
+      show('header');
+      show('home');
+
+      // Event Listeners
+      $('loginBtn')?.addEventListener('click', () => quickLogin(db, ref, set, update, onValue, status, show, hide));
+      $('logoutBtn')?.addEventListener('click', () => logout(db, ref, update, currentUser));
+      $('sendBtn')?.addEventListener('click', () => sendMsg(db, ref, push, currentUser, currentMatch));
+      $('msgInput')?.addEventListener('keypress', e => e.key === 'Enter' && sendMsg(db, ref, push, currentUser, currentMatch));
+
+      // === LOGIN ===
+      function quickLogin(db, ref, set, update, onValue, status, show, hide) {
+        const name = $('nameInput')?.value.trim() || 'User' + Math.floor(Math.random() * 1000);
+        const age = parseInt($('ageInput')?.value) || 16;
+        if (age < 13 || age > 19) return status('Umur harus 13-19!', 'error');
+
+        const id = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        currentUser = { id, name, age, online: true };
+        currentUser.uid = id; // TAMBAHKAN BARIS INI!
+
+        set(ref(db, 'users/' + id), currentUser)
+          .then(() => {
+            status('Login sukses!', 'success');
+            $('userStatus').textContent = `${name} Online`;
+            show('userStatus'); show('logoutBtn');
+            hide('home'); show('swipe');
+            loadSwipe(db, ref, onValue, currentUser);
+            startOnlinePing(db, ref, update, id);
+          })
+          .catch(err => status('Gagal login: ' + err.message, 'error'));
+      }
+
+      // === SWIPE ===
+      function loadSwipe(db, ref, onValue, currentUser) {
+        const usersRef = ref(db, 'users');
+        onValue(usersRef, (snap) => {
+          const users = snap.val() || {};
+          const others = Object.values(users).filter(u => u.id !== currentUser.id && u.online);
+          if (others.length === 0) {
+            $('swipeCard').innerHTML = '<div class="loading">Tidak ada user lain. Ajak teman!</div>';
+            return;
+          }
+          const target = others[Math.floor(Math.random() * others.length)];
+          $('swipeCard').innerHTML = `
+            <img src="https://via.placeholder.com/350x200/FF6B9D/white?text=${encodeURIComponent(target.name[0])}" alt="Profile">
+            <div class="card-info">
+              <h3>${target.name}, ${target.age}</h3>
+              <p>Kota: Jakarta</p>
+              <div class="actions">
+                <button class="btn-swipe btn-no" onclick="loadSwipe(window.firebaseDB.db, window.firebaseDB.ref, window.firebaseDB.onValue, currentUser)">X</button>
+                <button class="btn-swipe btn-yes" onclick="match('${target.id}')">Heart</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      // === MATCH ===
+      window.match = function(id) {
+        currentMatch = id;
+        push(ref(db, 'matches'), {
+          user1: currentUser.id,
+          user2: id,
+          timestamp: Date.now()
+        }).then(() => {
+          alert('Match! Buka chat sekarang!');
+          hide('swipe'); show('chat');
+          loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch);
+          startChatListener(db, ref, onChildAdded, query, orderByChild, equalTo, currentUser, currentMatch);
+        });
+      };
+
+      // === CHAT ===
+      function loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch) {
+        const chatId = [currentUser.id, currentMatch].sort().join('_');
+        const q = query(ref(db, 'messages'), orderByChild('chatId'), equalTo(chatId));
+        onValue(q, (snap) => {
+          const msgs = snap.val() || {};
+          const box = $('chatBox');
+          box.innerHTML = '';
+          Object.values(msgs).sort((a,b) => a.timestamp - b.timestamp).forEach(m => {
+            const div = document.createElement('div');
+            div.className = `msg ${m.sender === currentUser.id ? 'me' : 'other'}`;
+            div.textContent = m.text;
+            box.appendChild(div);
+          });
+          box.scrollTop = box.scrollHeight;
+        });
+      }
+
+      function startChatListener(db, ref, onChildAdded, query, orderByChild, equalTo, currentUser, currentMatch) {
+        if (chatListener) return;
+        const chatId = [currentUser.id, currentMatch].sort().join('_');
+        const q = query(ref(db, 'messages'), orderByChild('chatId'), equalTo(chatId));
+        chatListener = onChildAdded(q, () => loadChat(db, ref, query, orderByChild, equalTo, currentUser, currentMatch));
+      }
+
+      function sendMsg(db, ref, push, currentUser, currentMatch) {
+        const input = $('msgInput');
+        const text = input?.value.trim();
+        if (!text || !currentMatch) return;
+        const chatId = [currentUser.id, currentMatch].sort().join('_');
+        push(ref(db, 'messages'), {
+          chatId, sender: currentUser.id, text, timestamp: Date.now()
+        }).then(() => input.value = '');
+      }
+
+      // === ONLINE PING ===
+      function startOnlinePing(db, ref, update, id) {
+        setInterval(() => {
+          update(ref(db, 'users/' + id), { online: true });
+        }, 5000);
+        setInterval(() => loadSwipe(db, ref, onValue, currentUser), 12000);
+      }
+
+      // === LOGOUT ===
+      function logout(db, ref, update, currentUser) {
+        if (!confirm('Yakin ingin logout?')) return;
+        if (currentUser) {
+          update(ref(db, 'users/' + currentUser.id), { online: false });
+        }
+        location.reload();
+      }
+    });
+  </script>
+</body>
+</html>
